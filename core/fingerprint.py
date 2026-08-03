@@ -367,10 +367,6 @@ class FingerprintEngine:
 
         except Exception:
             pass
-                    return
-
-        except Exception:
-            pass
 
     def scan_batch(self, urls: List[str]) -> List[Dict]:
         """批量扫描多个URL。"""
