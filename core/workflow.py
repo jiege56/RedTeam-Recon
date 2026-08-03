@@ -20,6 +20,7 @@ from .fingerprint import FingerprintEngine
 from .portscan import PortScanner, get_common_ports, get_web_ports
 from .company import CompanyRecon
 from .pocscanner import PocScanner
+from .connectivity import ConnectivityChecker
 from .report import ReportGenerator
 from tools.registry import TOOLS, WORKFLOW_STEPS
 
@@ -112,6 +113,46 @@ class Workflow:
         self.log(f"最终目标: {target}")
         self.log(f"类型: {target.type}")
         self.log(f"{'='*60}")
+
+        # 连通性检测
+        if target_raw and target_raw != company_name:
+            self.log(f"[连通性] 检测目标连通性...")
+            checker = ConnectivityChecker(timeout=5, log_callback=self.log)
+            conn_result = checker.check(target.host)
+
+            results_connectivity = conn_result
+
+            if not conn_result["is_alive"]:
+                error_msg = f"目标 {target.host} ({conn_result.get('ip', '')}) 无法连通: {conn_result.get('error', '未知错误')}"
+                self.log(f"[连通性] {error_msg}")
+                self.log(f"[连通性] 扫描终止")
+
+                # 返回结果
+                results = {
+                    "target": target.raw,
+                    "target_type": target.type,
+                    "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
+                    "output_dir": "",
+                    "steps": {},
+                    "subdomains": [],
+                    "ips": [],
+                    "assets": [],
+                    "fingerprints": [],
+                    "dir_hits": [],
+                    "brute_findings": [],
+                    "poc_vulns": [],
+                    "connectivity": conn_result,
+                    "errors": [error_msg],
+                    "is_alive": False
+                }
+                self._running = False
+                return results
+            else:
+                self.log(f"[连通性] 目标连通正常")
+                if conn_result.get("ping", {}).get("alive"):
+                    self.log(f"[连通性] Ping: {conn_result['ping']['time_ms']}ms")
+                if conn_result.get("http", {}).get("alive"):
+                    self.log(f"[连通性] HTTP: {conn_result['http']['status']} - {conn_result['http'].get('title', '')}")
 
         # 创建输出目录
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
