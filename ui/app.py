@@ -157,7 +157,19 @@ class ReconHubApp:
         ttk.Checkbutton(modules_frame, text="端口/资产扫描", variable=self.portscan_var).pack(anchor=tk.W)
         ttk.Checkbutton(modules_frame, text="Web指纹识别", variable=self.fingerprint_var).pack(anchor=tk.W)
         ttk.Checkbutton(modules_frame, text="目录扫描", variable=self.dirscan_var).pack(anchor=tk.W)
-        ttk.Checkbutton(modules_frame, text="POC漏洞扫描 (2790+ POC)", variable=self.pocscan_var).pack(anchor=tk.W)
+
+        # POC扫描行（带分类选择）
+        poc_row = ttk.Frame(modules_frame)
+        poc_row.pack(fill=tk.X, anchor=tk.W)
+        ttk.Checkbutton(poc_row, text="POC漏洞扫描", variable=self.pocscan_var).pack(side=tk.LEFT)
+        ttk.Label(poc_row, text="分类:").pack(side=tk.LEFT, padx=(10, 2))
+        self.poc_category_var = tk.StringVar(value="全部")
+        self.poc_category_combo = ttk.Combobox(poc_row, textvariable=self.poc_category_var,
+                                               values=["全部", "CNVD", "CVE", "默认密码", "信息泄露",
+                                                       "指纹识别", "未授权访问", "漏洞", "版本"],
+                                               width=12, state="readonly")
+        self.poc_category_combo.pack(side=tk.LEFT)
+
         ttk.Checkbutton(modules_frame, text="弱口令爆破 (默认关闭)", variable=self.brute_var).pack(anchor=tk.W)
 
         # ========== 按钮区域 ==========
@@ -358,6 +370,7 @@ class ReconHubApp:
             "fingerprint": self.fingerprint_var.get(),
             "dirscan": self.dirscan_var.get(),
             "pocscan": self.pocscan_var.get(),
+            "poc_category": self.poc_category_var.get(),
             "brute": self.brute_var.get(),
         }
 

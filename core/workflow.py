@@ -256,7 +256,8 @@ class Workflow:
 
             # POC漏洞扫描（对发现的Web资产进行漏洞检测）
             if not self._cancelled and strategy.get("pocscan", False):
-                self._run_poc_scan(target, results, output_dir)
+                poc_category = strategy.get("poc_category", None)
+                self._run_poc_scan(target, results, output_dir, poc_category=poc_category)
 
         except Exception as e:
             self.log(f"[Workflow] 异常: {e}")
@@ -661,18 +662,54 @@ class Workflow:
 
         return self.runner.run_gui_tool(tool_id, entry, cwd, log_callback=self.log)
 
-    def _run_poc_scan(self, target: Target, results: dict, output_dir: Path):
-        """运行 POC 漏洞扫描。"""
+    def _run_poc_scan(self, target: Target, results: dict, output_dir: Path, poc_category: str = None):
+        """
+        运行 POC 漏洞扫描
+
+        Args:
+            target: 目标对象
+            results: 结果字典
+            output_dir: 输出目录
+            poc_category: POC分类过滤（None表示全部）
+        """
         self.log(f"[POC] 启动 POC 漏洞扫描...")
 
         # 获取 POC 扫描器统计
         scanner = PocScanner(self.config, log_callback=self.log)
         poc_stats = scanner.get_stats()
-        self.log(f"[POC] 加载 {poc_stats.get('total', 0)} 个 POC")
+        total_pocs = poc_stats.get("total", 0)
+        self.log(f"[POC] 加载 {total_pocs} 个 POC")
 
-        if poc_stats.get("total", 0) == 0:
-            self.log(f"[POC] 没有可用的 POC 文件")
+        if total_pocs == 0:
+            self.log(f"[POC] 没有可用的 POC 文件，请下载POC文件放入 pocs/afrog 目录")
             return
+
+        # 显示分类统计
+        categories = poc_stats.get("by_category", {})
+        if categories:
+            self.log(f"[POC] POC分类统计:")
+            for cat, count in sorted(categories.items(), key=lambda x: x[1], reverse=True):
+                self.log(f"[POC]   {cat}: {count} 个")
+
+        # 根据分类过滤POC
+        if poc_category and poc_category != "全部":
+            # 中英文分类名映射
+            category_map = {
+                "CNVD": "CNVD",
+                "CVE": "CVE",
+                "默认密码": "default-pwd",
+                "信息泄露": "disclosure",
+                "指纹识别": "fingerprinting",
+                "未授权访问": "unauthorized",
+                "漏洞": "vulnerability",
+                "版本": "version",
+            }
+            category_filter = category_map.get(poc_category, poc_category)
+            poc_filter = {"category": category_filter}
+            self.log(f"[POC] 使用分类过滤: {poc_category} ({category_filter})")
+        else:
+            poc_filter = None
+            self.log(f"[POC] 扫描全部分类")
 
         # 收集需要扫描的 URL
         urls_to_scan = []
@@ -711,8 +748,8 @@ class Workflow:
 
                 self.log(f"[POC] ({i}/{len(urls_to_scan)}) 扫描: {url}")
 
-                # 扫描（限制POC数量以加快速度）
-                vulns = scanner.scan(url, poc_filter={"severity": "high"})
+                # 扫描（传入分类过滤）
+                vulns = scanner.scan(url, poc_filter=poc_filter)
                 all_vulns.extend(vulns)
 
                 for vuln in vulns:

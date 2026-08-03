@@ -91,6 +91,7 @@ class PocLoader:
             "by_severity": {},
             "by_tag": {},
             "by_year": {},
+            "by_category": {},
         }
 
         for poc in self.pocs:
@@ -110,7 +111,36 @@ class PocLoader:
                 year = year_match.group(1)
                 stats["by_year"][year] = stats["by_year"].get(year, 0) + 1
 
+            # 按分类统计（从文件路径提取）
+            category = self._get_category(poc)
+            stats["by_category"][category] = stats["by_category"].get(category, 0) + 1
+
         return stats
+
+    def _get_category(self, poc: Dict) -> str:
+        """从POC文件路径提取分类"""
+        file_path = poc.get("_file", "")
+        # 提取父目录名作为分类
+        parts = Path(file_path).parts
+        # 查找 pocs/afrog/ 后的第一个目录
+        try:
+            idx = parts.index("afrog-pocs")
+            if idx + 1 < len(parts):
+                return parts[idx + 1]
+        except ValueError:
+            pass
+        return "other"
+
+    def get_categories(self) -> List[str]:
+        """获取所有可用的POC分类"""
+        categories = set()
+        for poc in self.pocs:
+            categories.add(self._get_category(poc))
+        return sorted(list(categories))
+
+    def get_pocs_by_category(self, category: str) -> List[Dict]:
+        """按分类获取POC"""
+        return [p for p in self.pocs if self._get_category(p) == category]
 
 
 class PocScanner:
