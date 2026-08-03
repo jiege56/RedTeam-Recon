@@ -69,7 +69,6 @@ BODY_RULES = [
     {"name": "Flask", "pattern": r"flask|werkzeug", "category": "Backend"},
     {"name": "Express", "pattern": r"express|X-Powered-By: Express", "category": "Backend"},
     {"name": "Struts2", "pattern": r"\.action|\.do|struts|s:form", "category": "Backend"},
-    {"name": "Shiro", "pattern": r"rememberMe|shiro|deleteMe", "category": "Backend"},
 
     # 中间件/组件
     {"name": "Swagger", "pattern": r"swagger-ui|api-docs|swagger\.json", "category": "Component"},
@@ -163,6 +162,7 @@ class FingerprintEngine:
         try:
             # 发送请求
             resp = self.session.get(url, timeout=self.timeout, allow_redirects=True)
+            self._last_response = resp  # 保存响应，用于获取所有 Set-Cookie
             result["status_code"] = resp.status_code
             result["headers"] = dict(resp.headers)
             result["server"] = resp.headers.get("Server", "")
@@ -216,46 +216,76 @@ class FingerprintEngine:
                 })
 
         # 特殊处理 Set-Cookie（检查 Shiro 等框架特征）
-        set_cookie = headers.get("Set-Cookie", "")
-        if set_cookie:
-            # Shiro 特征：rememberMe=deleteMe
-            if "rememberMe" in set_cookie or "deleteMe" in set_cookie:
+        # 注意：headers.get() 可能只返回第一个 Set-Cookie，需要检查所有
+        all_cookies = []
+
+        # 尝试从原始响应中获取所有 Set-Cookie
+        if hasattr(self, '_last_response') and self._last_response:
+            raw_headers = self._last_response.raw.headers
+            if hasattr(raw_headers, 'getlist'):
+                # urllib3 的 HTTPHeaderDict
+                all_cookies = raw_headers.getlist(b'set-cookie')
+            elif hasattr(raw_headers, 'items'):
+                for key, value in raw_headers.items():
+                    if key.lower() == 'set-cookie':
+                        all_cookies.append(value)
+
+        # 如果无法获取原始头，使用默认方式
+        if not all_cookies:
+            set_cookie = headers.get("Set-Cookie", "")
+            if set_cookie:
+                all_cookies = [set_cookie]
+
+        for cookie_str in all_cookies:
+            cookie_lower = cookie_str.lower()
+
+            # Shiro 特征：rememberMe=deleteMe（最准确）
+            if "rememberme" in cookie_lower and "deleteme" in cookie_lower:
                 fingerprints.append({
                     "name": "Shiro",
                     "category": "Backend",
-                    "evidence": f"Set-Cookie: {set_cookie}"
+                    "evidence": f"Set-Cookie: {cookie_str.strip()}"
                 })
+            # Shiro 特征：rememberMe=（空值或Base64）
+            elif re.search(r"rememberme\s*=", cookie_lower):
+                # 检查是否已经添加过 Shiro
+                if not any(fp["name"] == "Shiro" for fp in fingerprints):
+                    fingerprints.append({
+                        "name": "Shiro",
+                        "category": "Backend",
+                        "evidence": f"Set-Cookie: {cookie_str.strip()}"
+                    })
 
             # Laravel 特征
-            if "laravel_session" in set_cookie:
+            if "laravel_session" in cookie_lower:
                 fingerprints.append({
                     "name": "Laravel",
                     "category": "Backend",
-                    "evidence": f"Set-Cookie: {set_cookie}"
+                    "evidence": f"Set-Cookie: {cookie_str.strip()}"
                 })
 
             # PHPSESSION 特征
-            if "PHPSESSID" in set_cookie:
+            if "phpsessid" in cookie_lower:
                 fingerprints.append({
                     "name": "PHP",
                     "category": "Language",
-                    "evidence": f"Set-Cookie: {set_cookie}"
+                    "evidence": f"Set-Cookie: {cookie_str.strip()}"
                 })
 
             # JSESSIONID 特征（Java应用）
-            if "JSESSIONID" in set_cookie:
+            if "jsessionid" in cookie_lower:
                 fingerprints.append({
                     "name": "Java",
                     "category": "Language",
-                    "evidence": f"Set-Cookie: {set_cookie}"
+                    "evidence": f"Set-Cookie: {cookie_str.strip()}"
                 })
 
             # ASP.NET 特征
-            if "ASP.NET_SessionId" in set_cookie:
+            if "asp.net_sessionid" in cookie_lower:
                 fingerprints.append({
                     "name": "ASP.NET",
                     "category": "Language",
-                    "evidence": f"Set-Cookie: {set_cookie}"
+                    "evidence": f"Set-Cookie: {cookie_str.strip()}"
                 })
 
     def _match_body(self, body: str, fingerprints: list):
@@ -296,27 +326,47 @@ class FingerprintEngine:
 
         try:
             # 发送带有 rememberMe cookie 的请求
+            # Shiro 会在检测到无效 rememberMe cookie 时返回 deleteMe
             headers = {"Cookie": "rememberMe=1"}
             resp = self.session.get(url, timeout=self.timeout, allow_redirects=False, headers=headers)
 
-            # 检查响应头中是否有 rememberMe=deleteMe
-            set_cookie = resp.headers.get("Set-Cookie", "")
-            if "rememberMe=deleteMe" in set_cookie:
+            # 检查所有 Set-Cookie 头（可能有多个）
+            found_shiro = False
+
+            # 方法1：使用 resp.raw.headers (urllib3)
+            if hasattr(resp, 'raw') and hasattr(resp.raw, 'headers'):
+                raw_headers = resp.raw.headers
+                if hasattr(raw_headers, 'items'):
+                    for key, value in raw_headers.items():
+                        if key.lower() == 'set-cookie':
+                            if "rememberme=deleteme" in value.lower():
+                                found_shiro = True
+                                break
+
+            # 方法2：遍历 resp.headers
+            if not found_shiro:
+                for key, value in resp.headers.items():
+                    if key.lower() == 'set-cookie':
+                        if "rememberme=deleteme" in value.lower():
+                            found_shiro = True
+                            break
+
+            # 方法3：使用 get_all (如果可用)
+            if not found_shiro and hasattr(resp.headers, 'getlist'):
+                for cookie in resp.headers.getlist('Set-Cookie'):
+                    if "rememberme=deleteme" in cookie.lower():
+                        found_shiro = True
+                        break
+
+            if found_shiro:
                 fingerprints.append({
                     "name": "Shiro",
                     "category": "Backend",
                     "evidence": "rememberMe=deleteMe detected (active probe)"
                 })
-                return
 
-            # 再次检查所有 Set-Cookie（可能有多个）
-            for header_value in resp.headers.get("Set-Cookie", "").split(","):
-                if "rememberMe=deleteMe" in header_value:
-                    fingerprints.append({
-                        "name": "Shiro",
-                        "category": "Backend",
-                        "evidence": "rememberMe=deleteMe detected (active probe)"
-                    })
+        except Exception:
+            pass
                     return
 
         except Exception:
