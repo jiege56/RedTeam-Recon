@@ -161,14 +161,15 @@ class ReconHubApp:
         # POC扫描行（带分类选择）
         poc_row = ttk.Frame(modules_frame)
         poc_row.pack(fill=tk.X, anchor=tk.W)
-        ttk.Checkbutton(poc_row, text="POC漏洞扫描", variable=self.pocscan_var).pack(side=tk.LEFT)
+        ttk.Checkbutton(poc_row, text="POC漏洞扫描", variable=self.pocscan_var,
+                       command=self._update_poc_categories).pack(side=tk.LEFT)
         ttk.Label(poc_row, text="分类:").pack(side=tk.LEFT, padx=(10, 2))
         self.poc_category_var = tk.StringVar(value="全部")
         self.poc_category_combo = ttk.Combobox(poc_row, textvariable=self.poc_category_var,
-                                               values=["全部", "CNVD", "CVE", "默认密码", "信息泄露",
-                                                       "指纹识别", "未授权访问", "漏洞", "版本"],
-                                               width=12, state="readonly")
+                                               values=["全部"], width=18, state="readonly")
         self.poc_category_combo.pack(side=tk.LEFT)
+        # 初始化时更新分类
+        self._update_poc_categories()
 
         ttk.Checkbutton(modules_frame, text="弱口令爆破 (默认关闭)", variable=self.brute_var).pack(anchor=tk.W)
 
@@ -325,6 +326,37 @@ class ReconHubApp:
             self.dirscan_var.set(p["dirscan"])
             self.brute_var.set(p["brute"])
 
+    def _update_poc_categories(self):
+        """更新POC分类下拉框，显示各分类数量"""
+        try:
+            from core.pocscanner import PocLoader
+            loader = PocLoader()
+            stats = loader.get_stats()
+            categories = stats.get("by_category", {})
+
+            # 构建带数量的选项列表
+            options = ["全部"]
+            # 分类名映射（英文->中文）
+            name_map = {
+                "CNVD": "CNVD",
+                "CVE": "CVE",
+                "default-pwd": "默认密码",
+                "disclosure": "信息泄露",
+                "fingerprinting": "指纹识别",
+                "unauthorized": "未授权访问",
+                "vulnerability": "漏洞",
+                "version": "版本",
+            }
+            for cat, count in sorted(categories.items(), key=lambda x: x[1], reverse=True):
+                cn_name = name_map.get(cat, cat)
+                options.append(f"{cn_name} ({count})")
+
+            self.poc_category_combo["values"] = options
+        except Exception:
+            # 如果加载失败，使用默认值
+            self.poc_category_combo["values"] = ["全部", "CNVD", "CVE", "默认密码",
+                                                 "信息泄露", "指纹识别", "未授权访问", "漏洞", "版本"]
+
     def _start_scan(self):
         """
         开始扫描 - 智能判断输入内容：
@@ -370,7 +402,8 @@ class ReconHubApp:
             "fingerprint": self.fingerprint_var.get(),
             "dirscan": self.dirscan_var.get(),
             "pocscan": self.pocscan_var.get(),
-            "poc_category": self.poc_category_var.get(),
+            # 去掉括号中的数量，如 "CNVD (1523)" -> "CNVD"
+            "poc_category": self.poc_category_var.get().split(" (")[0] if " (" in self.poc_category_var.get() else self.poc_category_var.get(),
             "brute": self.brute_var.get(),
         }
 
