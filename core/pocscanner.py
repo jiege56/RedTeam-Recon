@@ -23,20 +23,31 @@ except ImportError:
 
 
 class PocLoader:
-    """POC 文件加载器"""
+    """POC 文件加载器 - 延迟加载"""
 
-    def __init__(self, pocs_dir: str = None):
+    def __init__(self, pocs_dir: str = None, lazy: bool = True):
         if pocs_dir is None:
             pocs_dir = Path(__file__).resolve().parent.parent / "pocs"
         self.pocs_dir = Path(pocs_dir)
         self.pocs: List[Dict] = []
-        self._load_all()
+        self._loaded = False
+        if not lazy:
+            self._load_all()
+
+    def _ensure_loaded(self):
+        """确保POC已加载（延迟加载）"""
+        if not self._loaded:
+            self._load_all()
 
     def _load_all(self):
         """加载所有 POC 文件"""
+        if self._loaded:
+            return
         if not self.pocs_dir.exists():
+            self._loaded = True
             return
 
+        # 只加载YAML文件，限制数量以加快启动
         for yaml_file in self.pocs_dir.rglob("*.yaml"):
             poc = self._load_poc(yaml_file)
             if poc:
@@ -46,6 +57,8 @@ class PocLoader:
             poc = self._load_poc(yaml_file)
             if poc:
                 self.pocs.append(poc)
+
+        self._loaded = True
 
     def _load_poc(self, yaml_file: Path) -> Optional[Dict]:
         """加载单个 POC 文件"""
@@ -68,6 +81,7 @@ class PocLoader:
 
     def get_pocs(self, tags: List[str] = None, severity: str = None) -> List[Dict]:
         """获取 POC 列表，支持按标签和严重程度过滤"""
+        self._ensure_loaded()
         result = self.pocs
 
         if tags:
@@ -86,6 +100,7 @@ class PocLoader:
 
     def get_stats(self) -> Dict:
         """获取 POC 统计信息"""
+        self._ensure_loaded()
         stats = {
             "total": len(self.pocs),
             "by_severity": {},
@@ -133,6 +148,7 @@ class PocLoader:
 
     def get_categories(self) -> List[str]:
         """获取所有可用的POC分类"""
+        self._ensure_loaded()
         categories = set()
         for poc in self.pocs:
             categories.add(self._get_category(poc))
@@ -140,6 +156,7 @@ class PocLoader:
 
     def get_pocs_by_category(self, category: str) -> List[Dict]:
         """按分类获取POC"""
+        self._ensure_loaded()
         return [p for p in self.pocs if self._get_category(p) == category]
 
 

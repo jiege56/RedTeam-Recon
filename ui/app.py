@@ -161,15 +161,13 @@ class ReconHubApp:
         # POC扫描行（带分类选择）
         poc_row = ttk.Frame(modules_frame)
         poc_row.pack(fill=tk.X, anchor=tk.W)
-        ttk.Checkbutton(poc_row, text="POC漏洞扫描", variable=self.pocscan_var,
-                       command=self._update_poc_categories).pack(side=tk.LEFT)
-        ttk.Label(poc_row, text="分类:").pack(side=tk.LEFT, padx=(10, 2))
+        ttk.Checkbutton(poc_row, text="POC漏洞扫描", variable=self.pocscan_var).pack(side=tk.LEFT)
+        ttk.Label(poc_row, text="分类:").pack(side=tk.LEFT, padx=(5, 2))
         self.poc_category_var = tk.StringVar(value="全部")
         self.poc_category_combo = ttk.Combobox(poc_row, textvariable=self.poc_category_var,
-                                               values=["全部"], width=18, state="readonly")
+                                               values=["全部", "CNVD", "CVE", "默认密码",
+                                                       "信息泄露", "未授权访问", "漏洞"], width=12, state="readonly")
         self.poc_category_combo.pack(side=tk.LEFT)
-        # 初始化时更新分类
-        self._update_poc_categories()
 
         ttk.Checkbutton(modules_frame, text="弱口令爆破 (默认关闭)", variable=self.brute_var).pack(anchor=tk.W)
 
