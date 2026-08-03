@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Project
+data/reports/*
+!data/reports/.gitkeep
+data/config.json
+data/history_*.json
+*.log
+
+# Tools (外部工具不提交)
+tools/goon/*
+tools/golin/*
+tools/oneforall/*
+!tools/*/.gitkeep
+
+# Build
+dist/
+*.zip
+*.exe
+*.jar
+
+# Sensitive
+*.key
+*.pem
+*.crt
