@@ -284,24 +284,59 @@ class PocScanner:
     def _evaluate_response(self, expression: str, resp, variables: Dict) -> bool:
         """评估响应表达式"""
         try:
-            # 简单的表达式评估
-            if "response.status" in expression:
-                status_match = re.search(r"response.status\s*==\s*(\d+)", expression)
-                if status_match:
-                    expected_status = int(status_match.group(1))
-                    if resp.status_code != expected_status:
-                        return False
+            # 构建评估上下文
+            context = {
+                "response": {
+                    "status": resp.status_code,
+                    "body": resp,
+                    "headers": dict(resp.headers),
+                    "text": resp.text,
+                },
+                "string": str,
+                "bytes": bytes,
+            }
+            context.update(variables)
 
-            if "response.body.bcontains" in expression:
-                # 检查响应体是否包含特定内容
-                body_match = re.search(r'response\.body\.bcontains\(bytes\(string\((\w+)\)\)\)', expression)
-                if body_match:
-                    var_name = body_match.group(1)
-                    expected_value = str(variables.get(var_name, ""))
-                    if expected_value and expected_value.encode() not in resp.content:
-                        return False
+            # 替换表达式中的 response.body.bcontains
+            def replace_bcontains(match):
+                inner = match.group(1)
+                return f"({inner}) in response['text']"
 
-            return True
+            expression = re.sub(
+                r"response\.body\.bcontains\(bytes\(string\((\w+)\)\)\)",
+                replace_bcontains,
+                expression
+            )
+
+            # 替换 response.status
+            expression = expression.replace("response.status", "response['status']")
+
+            # 替换 response.body.bcontains (其他格式)
+            expression = re.sub(
+                r"response\.body\.bcontains\(([^)]+)\)",
+                r"(\1) in response['text']",
+                expression
+            )
+
+            # 安全评估
+            allowed_names = {
+                "response": context["response"],
+                "string": str,
+                "bytes": bytes,
+                "len": len,
+                "str": str,
+                "int": int,
+            }
+            allowed_names.update(variables)
+
+            # 只允许安全的操作
+            code = compile(expression, "<string>", "eval")
+            for name in code.co_names:
+                if name not in allowed_names:
+                    return False
+
+            result = eval(expression, {"__builtins__": {}}, allowed_names)
+            return bool(result)
 
         except Exception:
             return False

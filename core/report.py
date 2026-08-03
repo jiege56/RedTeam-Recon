@@ -56,7 +56,7 @@ class ReportGenerator:
         self.config = config
 
     def generate(self, results: Dict[str, Any], output_dir: Path) -> Path:
-        """生成 Excel 报告，总览页面包含所有详细信息。"""
+        """生成 Excel 报告，总览页面直接列出所有详细信息。"""
         wb = Workbook()
         wb.remove(wb.active)
 
@@ -68,23 +68,19 @@ class ReportGenerator:
         company_info = results.get("company_info", {})
         company_name = company_info.get("company_name", "") if company_info else ""
 
-        # 生成报告文件名
+        # 生成简短的报告文件名
         if company_name and target and company_name != target:
-            # 有企业名称和目标：企业名称_目标_信息收集报告
-            safe_company = self._safe_filename(company_name)
-            safe_target = self._safe_filename(target)
-            report_name = f"{safe_company}_{safe_target}_信息收集报告.xlsx"
+            safe_company = self._safe_filename(company_name[:15])
+            safe_target = self._safe_filename(target[:20])
+            report_name = f"{safe_company}_{safe_target}.xlsx"
         elif company_name:
-            # 只有企业名称：企业名称_信息收集报告
-            safe_company = self._safe_filename(company_name)
-            report_name = f"{safe_company}_信息收集报告.xlsx"
+            safe_company = self._safe_filename(company_name[:20])
+            report_name = f"{safe_company}.xlsx"
         elif target:
-            # 只有目标：目标_信息收集报告
-            safe_target = self._safe_filename(target)
-            report_name = f"{safe_target}_信息收集报告.xlsx"
+            safe_target = self._safe_filename(target[:25])
+            report_name = f"{safe_target}.xlsx"
         else:
-            # 默认
-            report_name = f"RedTeam_Report_{results.get('timestamp', 'unknown')}.xlsx"
+            report_name = f"report_{results.get('timestamp', 'unknown')}.xlsx"
 
         # 保存
         report_path = output_dir / report_name
