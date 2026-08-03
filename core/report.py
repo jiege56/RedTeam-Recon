@@ -63,8 +63,31 @@ class ReportGenerator:
         # 创建总览工作表（包含所有详细信息）
         self._create_summary_sheet(wb, results)
 
+        # 获取目标名称，用于报告文件名
+        target = results.get("target", "unknown")
+        company_info = results.get("company_info", {})
+        company_name = company_info.get("company_name", "") if company_info else ""
+
+        # 生成报告文件名
+        if company_name and target and company_name != target:
+            # 有企业名称和目标：企业名称_目标_信息收集报告
+            safe_company = self._safe_filename(company_name)
+            safe_target = self._safe_filename(target)
+            report_name = f"{safe_company}_{safe_target}_信息收集报告.xlsx"
+        elif company_name:
+            # 只有企业名称：企业名称_信息收集报告
+            safe_company = self._safe_filename(company_name)
+            report_name = f"{safe_company}_信息收集报告.xlsx"
+        elif target:
+            # 只有目标：目标_信息收集报告
+            safe_target = self._safe_filename(target)
+            report_name = f"{safe_target}_信息收集报告.xlsx"
+        else:
+            # 默认
+            report_name = f"RedTeam_Report_{results.get('timestamp', 'unknown')}.xlsx"
+
         # 保存
-        report_path = output_dir / f"RedTeam_Report_{results.get('timestamp', 'unknown')}.xlsx"
+        report_path = output_dir / report_name
         wb.save(str(report_path))
 
         # 同时保存 JSON
@@ -72,6 +95,18 @@ class ReportGenerator:
         self._save_json(results, json_path)
 
         return report_path
+
+    def _safe_filename(self, name: str) -> str:
+        """生成安全的文件名，移除特殊字符。"""
+        import re
+        # 移除或替换不安全的字符
+        safe = re.sub(r'[<>:"/\\|?*]', '_', name)
+        # 移除前后空格
+        safe = safe.strip()
+        # 限制长度
+        if len(safe) > 50:
+            safe = safe[:50]
+        return safe if safe else "unknown"
 
     def _apply_header_style(self, ws, row, col_count):
         """应用表头样式。"""
