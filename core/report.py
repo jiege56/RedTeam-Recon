@@ -317,7 +317,8 @@ class ReportGenerator:
             ("资产数量", len(results.get("assets", []))),
             ("框架指纹", fp_count),
             ("目录扫描命中", len(results.get("dir_hits", []))),
-            ("漏洞/弱口令", len(results.get("brute_findings", []))),
+            ("POC漏洞", len(results.get("poc_vulns", []))),
+            ("弱口令/未授权", len(results.get("brute_findings", []))),
         ]
         for key, value in stats:
             ws.cell(row=row, column=1, value=key).font = Font(bold=True)
@@ -518,6 +519,38 @@ class ReportGenerator:
                 ws.cell(row=row, column=4).fill = RISK_HIGH_FILL
 
                 for col in range(1, 6):
+                    self._apply_cell_style(ws, row, col)
+                row += 1
+            row += 1
+
+        # ========== POC漏洞扫描结果 ==========
+        poc_vulns = results.get("poc_vulns", [])
+        if poc_vulns:
+            row = self._write_section_header(ws, row, f"🔴 POC漏洞扫描结果 ({len(poc_vulns)} 个)")
+            headers = ["序号", "漏洞名称", "漏洞ID", "严重程度", "目标URL", "标签"]
+            for col, h in enumerate(headers, 1):
+                ws.cell(row=row, column=col, value=h)
+            self._apply_header_style(ws, row, len(headers))
+            row += 1
+
+            for idx, vuln in enumerate(poc_vulns, 1):
+                ws.cell(row=row, column=1, value=idx)
+                ws.cell(row=row, column=2, value=vuln.get("name", ""))
+                ws.cell(row=row, column=3, value=vuln.get("id", ""))
+                ws.cell(row=row, column=4, value=vuln.get("severity", ""))
+                ws.cell(row=row, column=5, value=vuln.get("target", ""))
+                ws.cell(row=row, column=6, value=", ".join(vuln.get("tags", [])))
+
+                # 严重漏洞标红
+                severity = vuln.get("severity", "").lower()
+                if severity in ("critical", "high"):
+                    for col in range(1, 7):
+                        ws.cell(row=row, column=col).fill = RISK_HIGH_FILL
+                elif severity == "medium":
+                    for col in range(1, 7):
+                        ws.cell(row=row, column=col).fill = RISK_MED_FILL
+
+                for col in range(1, 7):
                     self._apply_cell_style(ws, row, col)
                 row += 1
             row += 1

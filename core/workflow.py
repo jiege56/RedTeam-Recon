@@ -19,6 +19,7 @@ from .parsers import parse_tool_output
 from .fingerprint import FingerprintEngine
 from .portscan import PortScanner, get_common_ports, get_web_ports
 from .company import CompanyRecon
+from .pocscanner import PocScanner
 from .report import ReportGenerator
 from tools.registry import TOOLS, WORKFLOW_STEPS
 
@@ -211,6 +212,10 @@ class Workflow:
             # 内置指纹识别（对发现的资产进行深度指纹识别）
             if not self._cancelled and self.config.get("strategies.fingerprint.enable", True):
                 self._run_builtin_fingerprint(target, results, output_dir)
+
+            # POC漏洞扫描（对发现的Web资产进行漏洞检测）
+            if not self._cancelled and strategy.get("pocscan", False):
+                self._run_poc_scan(target, results, output_dir)
 
         except Exception as e:
             self.log(f"[Workflow] 异常: {e}")
@@ -614,3 +619,68 @@ class Workflow:
         cwd = str(self.config.tool_path(tool_info["cwd"]))
 
         return self.runner.run_gui_tool(tool_id, entry, cwd, log_callback=self.log)
+
+    def _run_poc_scan(self, target: Target, results: dict, output_dir: Path):
+        """运行 POC 漏洞扫描。"""
+        self.log(f"[POC] 启动 POC 漏洞扫描...")
+
+        # 获取 POC 扫描器统计
+        scanner = PocScanner(self.config, log_callback=self.log)
+        poc_stats = scanner.get_stats()
+        self.log(f"[POC] 加载 {poc_stats.get('total', 0)} 个 POC")
+
+        if poc_stats.get("total", 0) == 0:
+            self.log(f"[POC] 没有可用的 POC 文件")
+            return
+
+        # 收集需要扫描的 URL
+        urls_to_scan = []
+
+        # 目标URL
+        if target.type == "url":
+            urls_to_scan.append(target.url)
+        elif target.type in ("domain", "ip"):
+            urls_to_scan.append(f"http://{target.host}")
+            urls_to_scan.append(f"https://{target.host}")
+
+        # 从资产中收集Web URL
+        for asset in results.get("assets", []):
+            if asset.get("type") == "web" and asset.get("url"):
+                url = asset["url"]
+                if url not in urls_to_scan:
+                    urls_to_scan.append(url)
+
+        # 限制扫描URL数量（避免时间过长）
+        urls_to_scan = urls_to_scan[:5]
+
+        if not urls_to_scan:
+            self.log(f"[POC] 没有需要扫描的 Web 目标")
+            return
+
+        self.log(f"[POC] 待扫描目标: {len(urls_to_scan)} 个")
+        for url in urls_to_scan:
+            self.log(f"[POC]   - {url}")
+
+        # 执行 POC 扫描
+        all_vulns = []
+        try:
+            for i, url in enumerate(urls_to_scan, 1):
+                if self._cancelled:
+                    break
+
+                self.log(f"[POC] ({i}/{len(urls_to_scan)}) 扫描: {url}")
+
+                # 扫描（限制POC数量以加快速度）
+                vulns = scanner.scan(url, poc_filter={"severity": "high"})
+                all_vulns.extend(vulns)
+
+                for vuln in vulns:
+                    self.log(f"[POC]   [!] 发现漏洞: {vuln.get('name', 'Unknown')} [{vuln.get('severity', 'unknown')}]")
+
+        except Exception as e:
+            self.log(f"[POC] POC扫描异常: {e}")
+            results["errors"].append(f"POC扫描: {e}")
+
+        results["poc_vulns"] = all_vulns
+        self.log(f"[POC] POC扫描完成，发现 {len(all_vulns)} 个漏洞")
+        self._emit_stats(results)

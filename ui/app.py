@@ -48,6 +48,7 @@ class ReconHubApp:
         self.portscan_var = tk.BooleanVar(value=True)
         self.fingerprint_var = tk.BooleanVar(value=True)
         self.dirscan_var = tk.BooleanVar(value=False)
+        self.pocscan_var = tk.BooleanVar(value=False)  # POC漏洞扫描
         self.brute_var = tk.BooleanVar(value=False)
 
         # 速率限制变量
@@ -156,7 +157,8 @@ class ReconHubApp:
         ttk.Checkbutton(modules_frame, text="端口/资产扫描", variable=self.portscan_var).pack(anchor=tk.W)
         ttk.Checkbutton(modules_frame, text="Web指纹识别", variable=self.fingerprint_var).pack(anchor=tk.W)
         ttk.Checkbutton(modules_frame, text="目录扫描", variable=self.dirscan_var).pack(anchor=tk.W)
-        ttk.Checkbutton(modules_frame, text="弱口令/POC扫描 (默认关闭)", variable=self.brute_var).pack(anchor=tk.W)
+        ttk.Checkbutton(modules_frame, text="POC漏洞扫描 (2790+ POC)", variable=self.pocscan_var).pack(anchor=tk.W)
+        ttk.Checkbutton(modules_frame, text="弱口令爆破 (默认关闭)", variable=self.brute_var).pack(anchor=tk.W)
 
         # ========== 按钮区域 ==========
         btn_frame = ttk.Frame(parent)
@@ -355,6 +357,7 @@ class ReconHubApp:
             "portscan": self.portscan_var.get(),
             "fingerprint": self.fingerprint_var.get(),
             "dirscan": self.dirscan_var.get(),
+            "pocscan": self.pocscan_var.get(),
             "brute": self.brute_var.get(),
         }
 

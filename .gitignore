@@ -51,6 +51,11 @@ tools/golin/*
 tools/oneforall/*
 !tools/*/.gitkeep
 
+# POC files (POC文件不提交，用户自行下载)
+pocs/afrog/*
+pocs/xray/*
+!pocs/*/.gitkeep
+
 # Build
 dist/
 *.zip
